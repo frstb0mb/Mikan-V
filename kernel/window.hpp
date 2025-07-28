@@ -66,6 +66,8 @@ class Window {
   /** @brief 指定した位置にピクセルを書き込む。 */
   void Write(Vector2D<int> pos, PixelColor c);
 
+  void copy(uint32_t *buffer, uint64_t size);
+
   /** @brief 平面描画領域の横幅をピクセル単位で返す。 */
   int Width() const;
   /** @brief 平面描画領域の高さをピクセル単位で返す。 */
@@ -135,3 +137,4 @@ void DrawWindow(PixelWriter& writer, const char* title);
 void DrawTextbox(PixelWriter& writer, Vector2D<int> pos, Vector2D<int> size);
 void DrawTerminal(PixelWriter& writer, Vector2D<int> pos, Vector2D<int> size);
 void DrawWindowTitle(PixelWriter& writer, const char* title, bool active);
+void DrawFromBuffer(Window& window, uint32_t *buffer, uint64_t size);

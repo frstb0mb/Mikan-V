@@ -1,6 +1,7 @@
 #ifdef __cplusplus
 #include <cstddef>
 #include <cstdint>
+#include "../kernel/vmm/vm_syscall.hpp"
 
 extern "C" {
 #else
@@ -33,6 +34,7 @@ struct SyscallResult SyscallWinDrawLine(
 
 struct SyscallResult SyscallCloseWindow(uint64_t layer_id_flags);
 struct SyscallResult SyscallReadEvent(struct AppEvent* events, size_t len);
+struct SyscallResult SyscallReadEventNB(struct AppEvent* events, size_t len);
 
 #define TIMER_ONESHOT_REL 1
 #define TIMER_ONESHOT_ABS 0
@@ -44,6 +46,18 @@ struct SyscallResult SyscallReadFile(int fd, void* buf, size_t count);
 struct SyscallResult SyscallDemandPages(size_t num_pages, int flags);
 struct SyscallResult SyscallMapFile(int fd, size_t* file_size, int flags);
 struct SyscallResult SyscallIsTerminal(int fd);
+
+// CPP only
+#ifdef __cplusplus
+struct SyscallResult SyscallCreateVM();
+struct SyscallResult SyscallDestroyVM(uint8_t vm_id);
+struct SyscallResult SyscallStartVM(uint8_t vm_id);
+struct SyscallResult SyscallSetMemory(uint8_t vm_id, uint64_t host_addr, uint64_t guest_addr, uint64_t mem_size, uint32_t protect);
+struct SyscallResult SyscallControlVM(uint8_t vm_id, vm_control control_id, void *buffer, uint64_t size);
+#endif
+
+struct SyscallResult SyscallWinDrawFromBuffer(uint64_t layer_id_flags, uint32_t *buffer, uint64_t size);
+struct SyscallResult SyscallGetActiveLayerID();
 
 #ifdef __cplusplus
 } // extern "C"

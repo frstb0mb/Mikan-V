@@ -6,6 +6,19 @@
 bits 64
 section .text
 
+global IoOut8
+IoOut8:
+    mov dx, di  ; dx = addr
+    mov ax, si  ; eax = data
+    out dx, al
+    ret
+
+global IoIn8
+IoIn8:
+    mov dx, di    ; dx = addr
+    in  al, dx
+    ret
+
 global IoOut32  ; void IoOut32(uint16_t addr, uint32_t data);
 IoOut32:
     mov dx, di    ; dx = addr
@@ -25,6 +38,49 @@ GetCS:
     mov ax, cs
     ret
 
+global GetDS  ; uint16_t GetCS(void);
+GetDS:
+    xor eax, eax  ; also clears upper 32 bits of rax
+    mov ax, ds
+    ret
+
+global GetES  ; uint16_t GetCS(void);
+GetES:
+    xor eax, eax  ; also clears upper 32 bits of rax
+    mov ax, es
+    ret
+
+global GetFS  ; uint16_t GetCS(void);
+GetFS:
+    xor eax, eax  ; also clears upper 32 bits of rax
+    mov ax, fs
+    ret
+
+global GetGS  ; uint16_t GetCS(void);
+GetGS:
+    xor eax, eax  ; also clears upper 32 bits of rax
+    mov ax, gs
+    ret
+
+global GetSS  ; uint16_t GetCS(void);
+GetSS:
+    xor eax, eax  ; also clears upper 32 bits of rax
+    mov ax, ss
+    ret
+
+global GetTR  ; uint16_t GetCS(void);
+GetTR:
+    xor rax, rax
+    str     ax
+    ret
+
+global GetLDTR  ; uint16_t GetCS(void);
+GetLDTR:
+    sldt    rax
+    ret
+
+
+
 global LoadIDT  ; void LoadIDT(uint16_t limit, uint64_t offset);
 LoadIDT:
     push rbp
@@ -37,6 +93,11 @@ LoadIDT:
     pop rbp
     ret
 
+global SaveIDT  ; void SaveIDT(addr);
+SaveIDT:
+    sidt [rdi]
+    ret
+
 global LoadGDT  ; void LoadGDT(uint16_t limit, uint64_t offset);
 LoadGDT:
     push rbp
@@ -47,6 +108,11 @@ LoadGDT:
     lgdt [rsp]
     mov rsp, rbp
     pop rbp
+    ret
+
+global SaveGDT
+SaveGDT:
+    sgdt [rdi]
     ret
 
 global SetCSSS  ; void SetCSSS(uint16_t cs, uint16_t ss);
@@ -94,6 +160,17 @@ SetCR3:
 global GetCR3  ; uint64_t GetCR3();
 GetCR3:
     mov rax, cr3
+    ret
+
+global GetCR4  ; uint64_t GetCR4();
+GetCR4:
+    mov rax, cr4
+    ret
+
+global GetRFLAGS
+GetRFLAGS:
+    pushfq
+    pop rax
     ret
 
 extern kernel_main_stack
@@ -285,6 +362,14 @@ WriteMSR:  ; void WriteMSR(uint32_t msr, uint64_t value);
     wrmsr
     ret
 
+global ReadMSR
+ReadMSR:
+    mov rcx, rdi
+    rdmsr
+    shl rdx, 32
+    or rax, rdx
+    ret
+
 extern GetCurrentTaskOSStackPointer
 extern syscall_table
 global SyscallEntry
@@ -353,4 +438,202 @@ ExitApp:
 global InvalidateTLB  ; void InvalidateTLB(uint64_t addr);
 InvalidateTLB:
     invlpg [rdi]
+    ret
+
+global get_rsp
+get_rsp:
+    mov rax, rsp
+    ret
+
+global EnableVMX
+EnableVMX:
+    push    rax
+    xor     rax,rax
+    mov     rax,cr4
+    or      rax,02000h  ; Set the 14th bit
+    mov     cr4,rax
+    pop     rax
+    ret
+
+%macro get_vmx_err 0
+    pushfq
+    pop rax
+    test ax, 0x40
+    jnz %%VMfailValid
+    test ax, 0x01
+    jnz %%VMfailInvalid
+    mov rax, 0
+    jmp %%EndCheck
+%%VMfailInvalid:
+    mov rax, 1
+    jmp %%EndCheck
+%%VMfailValid:
+    mov rax, 2
+%%EndCheck
+%endmacro
+
+global vmx_on
+vmx_on:
+    vmxon [rdi]
+    get_vmx_err
+    ret
+
+global vmx_off
+vmx_off:
+    vmxoff
+    get_vmx_err
+    ret
+
+global vmx_vmclear
+vmx_vmclear:
+    vmclear [rdi]
+    get_vmx_err
+    ret
+
+global vmx_vmptrld
+vmx_vmptrld:
+    vmptrld [rdi]
+    get_vmx_err
+    ret
+
+global vmx_vmwrite
+vmx_vmwrite:
+    vmwrite rdi, rsi
+    get_vmx_err
+    ret
+
+global vmx_vmread
+vmx_vmread:
+    vmread [rsi], rdi
+    get_vmx_err
+    ret
+
+global IsSupportVMX
+IsSupportVMX:
+    mov eax, 1
+    cpuid
+    bt ecx, 5
+    jc .support
+    mov rax, 0
+    ret
+.support:
+    mov rax, 1
+    ret
+
+struc context
+    .rax: resq 1
+    .rcx: resq 1
+    .rdx: resq 1
+    .rbx: resq 1
+    .rsp: resq 1
+    .rbp: resq 1
+    .rsi: resq 1
+    .rdi: resq 1
+    .r8 : resq 1
+    .r9 : resq 1
+    .r10: resq 1
+    .r11: resq 1
+    .r12: resq 1
+    .r13: resq 1
+    .r14: resq 1
+    .r15: resq 1
+    .rip: resq 1
+endstruc
+
+global vmlaunch
+vmlaunch:
+    pushfq
+    push rax
+    push rcx
+    push rdx
+    push rbx
+    push rbp
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; write host rsp
+    mov r15, 6C14h
+    mov r14, rsp
+    sub r14, 8h     ; consider rcx pushed later
+    vmwrite r15, r14
+    pop r15
+    pop r14
+    push r14
+    push r15
+
+    push rdi
+    cmp rsi, 0
+
+    mov rax, [rdi + context.rax]
+    mov rcx, [rdi + context.rcx]
+    mov rdx, [rdi + context.rdx]
+    mov rbx, [rdi + context.rbx]
+    mov rbp, [rdi + context.rbp]
+    mov rsi, [rdi + context.rsi]
+    mov r8 , [rdi + context.r8]
+    mov r9 , [rdi + context.r9]
+    mov r10, [rdi + context.r10]
+    mov r11, [rdi + context.r11]
+    mov r12, [rdi + context.r12]
+    mov r13, [rdi + context.r13]
+    mov r14, [rdi + context.r14]
+    mov r15, [rdi + context.r15]
+    mov rdi, [rdi + context.rdi]
+
+    jne RESUME
+    vmlaunch
+    jmp FAIL_ENTRY
+RESUME:
+    vmresume
+    jmp FAIL_ENTRY
+
+global VMXRestoreState:
+VMXRestoreState:
+    push rax
+    mov rax, [rsp + 8h]
+    mov [rax + context.rcx], rcx
+    mov [rax + context.rdx], rdx
+    mov [rax + context.rbx], rbx
+    mov [rax + context.rbp], rbp
+    mov [rax + context.rsi], rsi
+    mov [rax + context.rdi], rdi
+    mov [rax + context.r8], r8
+    mov [rax + context.r9], r9
+    mov [rax + context.r10], r10
+    mov [rax + context.r11], r11
+    mov [rax + context.r12], r12
+    mov [rax + context.r13], r13
+    mov [rax + context.r14], r14
+    mov [rax + context.r15], r15
+    pop rcx
+    mov [rax+ context.rax], rcx
+
+FAIL_ENTRY:
+    pop r15
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rbx
+    pop rdx
+    pop rcx
+    pop rax
+    get_vmx_err
+    popfq
+
     ret

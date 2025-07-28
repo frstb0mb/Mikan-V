@@ -2,6 +2,7 @@
 
 #include "logger.hpp"
 #include "font.hpp"
+#include <string.h>
 
 namespace {
   void DrawTextbox(PixelWriter& writer, Vector2D<int> pos, Vector2D<int> size,
@@ -100,6 +101,24 @@ const PixelColor& Window::At(Vector2D<int> pos) const{
 void Window::Write(Vector2D<int> pos, PixelColor c) {
   data_[pos.y][pos.x] = c;
   shadow_buffer_.Writer().Write(pos, c);
+}
+
+void Window::copy(uint32_t *buffer, uint64_t size)
+{
+  if (size > (width_-10)*(height_-30)*4)
+  {
+    return;
+  }
+
+  // avoid window frame
+ for (int y = 0; y < height_-30; y++)
+  {
+    for (int x = 0; x < width_-10; x++)
+    {
+      data_[y+25][x+5] = ToColor(buffer[x+(width_-10)*y]);
+      shadow_buffer_.Writer().Write({x+5,y+25}, data_[y+25][x+5]);
+    }
+  }
 }
 
 int Window::Width() const {
@@ -209,4 +228,9 @@ void DrawWindowTitle(PixelWriter& writer, const char* title, bool active) {
       writer.Write({win_w - 5 - kCloseButtonWidth + x, 5 + y}, c);
     }
   }
+}
+
+void DrawFromBuffer(Window& window, uint32_t *buffer, uint64_t size)
+{
+  window.copy(buffer, size);
 }

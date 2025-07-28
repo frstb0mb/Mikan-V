@@ -27,3 +27,11 @@ define_syscall ReadFile,         0x8000000d
 define_syscall DemandPages,      0x8000000e
 define_syscall MapFile,          0x8000000f
 define_syscall IsTerminal,       0x80000010
+define_syscall CreateVM,         0x80000011
+define_syscall DestroyVM,        0x80000012
+define_syscall StartVM,          0x80000013
+define_syscall SetMemory,        0x80000014
+define_syscall WinDrawFromBuffer,0x80000015
+define_syscall ControlVM,        0x80000016
+define_syscall ReadEventNB,      0x80000017
+define_syscall GetActiveLayerID, 0x80000018

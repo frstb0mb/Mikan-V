@@ -15,6 +15,8 @@
 #include "timer.hpp"
 #include "keyboard.hpp"
 #include "app_event.hpp"
+#include "vmm/vmm.hpp"
+#include "window.hpp"
 
 namespace syscall {
   struct Result {
@@ -132,6 +134,14 @@ SYSCALL(WinFillRectangle) {
       }, arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+SYSCALL(WinDrawFromBuffer) {
+  return DoWinFunc(
+      [](Window& win, uint32_t *buff, uint64_t size) {
+        DrawFromBuffer(win, buff, size*sizeof(uint32_t));
+        return Result{ 0, 0 };
+      }, arg1, (uint32_t*)arg2, arg3);
+}
+
 SYSCALL(GetCurrentTick) {
   return { timer_manager->CurrentTick(), kTimerFreq };
 }
@@ -217,6 +227,83 @@ SYSCALL(ReadEvent) {
       continue;
     }
     __asm__("sti");
+
+    if (!msg) {
+      break;
+    }
+
+    switch (msg->type) {
+    case Message::kKeyPush:
+      if (msg->arg.keyboard.keycode == 20 /* Q key */ &&
+          msg->arg.keyboard.modifier & (kLControlBitMask | kRControlBitMask)) {
+        app_events[i].type = AppEvent::kQuit;
+        ++i;
+      } else {
+        app_events[i].type = AppEvent::kKeyPush;
+        app_events[i].arg.keypush.modifier = msg->arg.keyboard.modifier;
+        app_events[i].arg.keypush.keycode = msg->arg.keyboard.keycode;
+        app_events[i].arg.keypush.ascii = msg->arg.keyboard.ascii;
+        app_events[i].arg.keypush.press = msg->arg.keyboard.press;
+        ++i;
+      }
+      break;
+    case Message::kMouseMove:
+      app_events[i].type = AppEvent::kMouseMove;
+      app_events[i].arg.mouse_move.x = msg->arg.mouse_move.x;
+      app_events[i].arg.mouse_move.y = msg->arg.mouse_move.y;
+      app_events[i].arg.mouse_move.dx = msg->arg.mouse_move.dx;
+      app_events[i].arg.mouse_move.dy = msg->arg.mouse_move.dy;
+      app_events[i].arg.mouse_move.buttons = msg->arg.mouse_move.buttons;
+      ++i;
+      break;
+    case Message::kMouseButton:
+      app_events[i].type = AppEvent::kMouseButton;
+      app_events[i].arg.mouse_button.x = msg->arg.mouse_button.x;
+      app_events[i].arg.mouse_button.y = msg->arg.mouse_button.y;
+      app_events[i].arg.mouse_button.press = msg->arg.mouse_button.press;
+      app_events[i].arg.mouse_button.button = msg->arg.mouse_button.button;
+      ++i;
+      break;
+    case Message::kTimerTimeout:
+      if (msg->arg.timer.value < 0) {
+        app_events[i].type = AppEvent::kTimerTimeout;
+        app_events[i].arg.timer.timeout = msg->arg.timer.timeout;
+        app_events[i].arg.timer.value = -msg->arg.timer.value;
+        ++i;
+      }
+      break;
+    case Message::kWindowClose:
+      app_events[i].type = AppEvent::kQuit;
+      ++i;
+      break;
+    default:
+      Log(kInfo, "uncaught event type: %u\n", msg->type);
+    }
+  }
+
+  return { i, 0 };
+}
+
+SYSCALL(ReadEventNB) {
+  if (arg1 < 0x8000'0000'0000'0000) {
+    return { 0, EFAULT };
+  }
+  const auto app_events = reinterpret_cast<AppEvent*>(arg1);
+  const size_t len = arg2;
+
+  __asm__("cli");
+  auto& task = task_manager->CurrentTask();
+  __asm__("sti");
+  size_t i = 0;
+
+  while (i < len) {
+    __asm__("cli");
+    auto msg = task.ReceiveMessage();
+    __asm__("sti");
+
+    if (!msg && i == 0) {
+      return {0, ENODATA};
+    }
 
     if (!msg) {
       break;
@@ -408,13 +495,61 @@ SYSCALL(IsTerminal) {
   return { task.Files()[fd]->IsTerminal(), 0 };
 }
 
+SYSCALL(CreateVM) {
+  const auto vm_id = CreateVMInternal();
+  if (vm_id == vmm::MAX_VM)
+  {
+    return { vm_id, EBADF };
+  }
+
+  return { vm_id, 0 };
+}
+
+SYSCALL(DestroyVM) {
+  const uint8_t vm_id = arg1;
+  DestroyVMInternal(vm_id);
+  return {0, 0};
+}
+
+SYSCALL(StartVM) {
+  const uint8_t vm_id = arg1;
+  const auto ret = StartVMInternal(vm_id);
+
+  return {ret, 0};
+}
+
+SYSCALL(SetMemory) {
+  const uint8_t vm_id = arg1;
+  const uint64_t host_addr = arg2;
+  const uint64_t guest_addr = arg3;
+  const uint64_t mem_size = arg4;
+  const uint64_t protect = arg5;
+  const auto ret = SetMemoryInternal(vm_id, host_addr, guest_addr, mem_size, protect);
+
+  return {ret, 0};
+}
+
+SYSCALL(ControlVM) {
+  const uint8_t vm_id = arg1;
+  const auto control_id = (vm_control)arg2;
+  void* buffer = (void* )arg3;
+  const uint64_t size = arg4;
+  const auto ret = ControlVMInternal(vm_id, control_id, buffer, size);
+
+  return {ret, 0};
+}
+
+SYSCALL(GetActiveLayerID) {
+  return {active_layer->GetActive(), 0};
+}
+
 #undef SYSCALL
 
 } // namespace syscall
 
 using SyscallFuncType = syscall::Result (uint64_t, uint64_t, uint64_t,
                                          uint64_t, uint64_t, uint64_t);
-extern "C" std::array<SyscallFuncType*, 0x11> syscall_table{
+extern "C" std::array<SyscallFuncType*, 0x19> syscall_table{
   /* 0x00 */ syscall::LogString,
   /* 0x01 */ syscall::PutString,
   /* 0x02 */ syscall::Exit,
@@ -432,6 +567,14 @@ extern "C" std::array<SyscallFuncType*, 0x11> syscall_table{
   /* 0x0e */ syscall::DemandPages,
   /* 0x0f */ syscall::MapFile,
   /* 0x10 */ syscall::IsTerminal,
+  /* 0x11 */ syscall::CreateVM,
+  /* 0x12 */ syscall::DestroyVM,
+  /* 0x13 */ syscall::StartVM,
+  /* 0x14 */ syscall::SetMemory,
+  /* 0x15 */ syscall::WinDrawFromBuffer,
+  /* 0x16 */ syscall::ControlVM,
+  /* 0x17 */ syscall::ReadEventNB,
+  /* 0x18 */ syscall::GetActiveLayerID,
 };
 
 void InitializeSyscall() {
