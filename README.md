@@ -4,11 +4,13 @@ Mikan-V is an operating system that includes a Type-2 hypervisor capable of runn
 The goal is to implement this system by adding features rather than modifying existing functionality whenever possible.
 
 ![](Mikan-V.png)
+
 ## Build Instructions
 
 Follow the build steps provided in the [README_original.md](./README_original.md).
 
 ## How to Use
+Mikan-V requires an Intel CPU with VT-x enabled.
 
 Run Mikan-V using [VMware Workstation](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion).  
 After installing VMware Workstation, create a new virtual machine and add or overwrite the following lines to the `.vmx` file, or enable the equivalent options via the GUI:
@@ -35,3 +37,12 @@ After booting the VM, type `vm` in the terminal to launch Mikan-V.
 - To send the F2 key to the VM, use the F3 key instead.
 - The file system is not virtualized — it is shared between the host and guest.
 - USB and PCI devices are not virtualized and are also not used by the host.
+
+
+## Reference
+- https://github.com/SinaKarvandi/Hypervisor-From-Scratch/
+- https://github.com/intel/haxm
+- https://github.com/29jm/SnowflakeOS
+    - for PS/2 keyboard
+- intel SDM
+    - https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
