@@ -1,43 +1,37 @@
-# MikanOS
+# Mikan-V
 
-MikanOS はレガシーフリーなアーキテクチャ（UEFI BIOS、Intel 64 モード）で動作する教育用オペレーティングシステムです。
+Mikan-V is an operating system that includes a Type-2 hypervisor capable of running a MikanOS virtual machine on top of MikanOS itself.  
+The goal is to implement this system by adding features rather than modifying existing functionality whenever possible.
 
-## ファイル構成
+![](Mikan-V.png)
+## Build Instructions
 
-- MikanLoaderPkg
-    - UEFI アプリとして構成したブートローダ
-- kernel
-    - MikanOS のカーネル
-- resource/nihongo.ttf
-    - IPA ゴシックのフォントファイル
-- IPA_Font_License_Agreement_v1.0.txt
-    - IPA フォントのライセンス文書
+Follow the build steps provided in the [README_original.md](./README_original.md).
 
-## ビルド方法
+## How to Use
 
-[mikanos-build リポジトリ](https://github.com/uchan-nos/mikanos-build/) に MikanOS をビルドするためのスクリプトがあります。
-mikanos-build の手順に沿って開発ツールを導入した後、devenv/buildenv.sh を読み込むことでビルド可能です。
-（devenv/buildenv.sh により環境変数 CPPFLAGS などが適切に設定されます。）
+Run Mikan-V using [VMware Workstation](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion).  
+After installing VMware Workstation, create a new virtual machine and add or overwrite the following lines to the `.vmx` file, or enable the equivalent options via the GUI:
 
-MikanOS の最新版をビルドするためには mikanos-build の最新版が必要です。
+```
+memsize = "1024"
+vhv.enable = "TRUE"
+firmware = "efi"
+```
 
-## 教科書
+Once you’ve built the project and obtained `disk.img`, convert it to a VMDK file using the following command:
 
-MikanOS の作り方を説明した教科書があります。
-[ゼロからのOS自作入門](https://zero.osdev.jp/)
+```
+qemu-img convert -O vmdk disk.img <VM Name>.vmdk
+```
 
-## スクリーンショット
+Move the converted `<VM Name>.vmdk` file into your VMware virtual machine's directory.  
+By default(Windows), this is located at: `%USERPROFILE%\Documents\Virtual Machines\<VM Name>`
 
-「ゼロからのOS自作入門」の最終章を終えたときの姿
-![30章後の姿](mikanos-after30-photo.png)
+After booting the VM, type `vm` in the terminal to launch Mikan-V.
 
-## 開発への参加
+## Notes
 
-MikanOS への機能追加、バグ修正の提案は Pull Request にてお願いします。
-Pull Request の出し方はこちらで説明しています。 [プルリクエストの送り方](https://github.com/uchan-nos/mikanos/blob/master/docs/how-to-send-pull-request.md)
-
-実装が伴わない「単なる要望」は基本的に受け付けません。
-実装をきちんと作ってから Pull Request を提出してください。
-
-もし、実装したいけど力が不足して実装できない、という場合はお気軽に Issues でご連絡ください。
-実装ができるようになるように、できるだけご協力いたします。
+- To send the F2 key to the VM, use the F3 key instead.
+- The file system is not virtualized — it is shared between the host and guest.
+- USB and PCI devices are not virtualized and are also not used by the host.

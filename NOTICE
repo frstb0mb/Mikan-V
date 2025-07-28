@@ -11,3 +11,10 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+This product also includes code from external sources:
+
+File "kernel/vmm/ia32_compact.h" includes code from ia32-doc(https://github.com/ia32-doc/ia32-doc)
+licensed under the MIT License.
+Copyright (c) 2018 Petr Benes
+See the file for license details.
