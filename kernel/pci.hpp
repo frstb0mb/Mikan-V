@@ -79,7 +79,7 @@ namespace pci {
   bool IsSingleFunctionDevice(uint8_t header_type);
 
   /** @brief ScanAllBus() により発見された PCI デバイスの一覧 */
-  inline std::array<Device, 32> devices;
+  inline std::array<Device, 64> devices;
   /** @brief devices の有効な要素の数 */
   inline int num_device;
   /** @brief PCI デバイスをすべて探索し devices に格納する

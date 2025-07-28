@@ -61,6 +61,10 @@ class InterruptVector {
   enum Number {
     kXHCI = 0x40,
     kLAPICTimer = 0x41,
+    kIOAPICTimer = 0x50, // unused
+    kKeyBoardPS2 = 0x51,
+    Dummy = 0x57,
+    kMousePS2 = 0x5C,
   };
 };
 

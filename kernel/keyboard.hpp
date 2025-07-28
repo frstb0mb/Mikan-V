@@ -19,3 +19,4 @@ static const int kRAltBitMask     = 0b01000000u;
 static const int kRGUIBitMask     = 0b10000000u;
 
 void InitializeKeyboard();
+void SendPS2Key(uint8_t keycode);

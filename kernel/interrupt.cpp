@@ -14,6 +14,9 @@
 #include "task.hpp"
 #include "graphics.hpp"
 #include "font.hpp"
+#include "logger.hpp"
+#include "usb/classdriver/mouse.hpp"
+#include "keyboard.hpp"
 
 std::array<InterruptDescriptor, 256> idt;
 
@@ -124,6 +127,159 @@ namespace {
   FaultHandlerNoError(MC)
   FaultHandlerNoError(XM)
   FaultHandlerNoError(VE)
+
+  __attribute__((interrupt))
+  void IntHandlerKeyBoard(InterruptFrame* frame)
+  {
+    auto keycode = IoIn8(0x60);
+    SendPS2Key(keycode);
+    IoOut8(0x20, 0x20);
+  }
+
+  uint8_t mouse_index = 0;
+  uint8_t mouse_code[3] = {};
+
+  // ref: https://github.com/29jm/SnowflakeOS/blob/b7335e50918dea7cae0119d81341f29d59bcebe9/kernel/src/devices/mouse.c
+  __attribute__((interrupt))
+  void IntHandlerMouse(InterruptFrame* frame)
+  { 
+    mouse_code[mouse_index] = static_cast<uint8_t>(IoIn8(0x60));
+
+    mouse_index = (mouse_index + 1)%3;
+    if (mouse_index == 0)
+    {
+      if (!usb::HIDMouseDriver::default_observer)
+      {
+        goto END;
+      }
+
+      #define MOUSE_Y_OVERFLOW (1 << 7)
+      #define MOUSE_X_OVERFLOW (1 << 6)
+      #define MOUSE_Y_NEG (1 << 5)
+      #define MOUSE_X_NEG (1 << 4)
+      uint8_t flags = mouse_code[0];
+      int32_t delta_x = (int32_t) mouse_code[1];
+      int32_t delta_y = (int32_t) mouse_code[2];
+      // Packets with X or Y overflow are probably garbage
+      if (flags & MOUSE_X_OVERFLOW || flags & MOUSE_Y_OVERFLOW)
+      {
+          goto END;
+      }
+
+      // Two's complement by hand
+      if (flags & MOUSE_X_NEG)
+      {
+          delta_x |= 0xFFFFFF00;
+      }
+
+      if (flags & MOUSE_Y_NEG)
+      {
+          delta_y |= 0xFFFFFF00;
+      }
+
+      usb::HIDMouseDriver::default_observer(flags, delta_x, -delta_y);
+    }
+END:
+    IoOut8(0xA0, 0x20);
+    IoOut8(0x20, 0x20);
+  }
+}
+
+// ref: https://stackoverflow.com/questions/38877152/ps-2-mouse-not-firing
+void mouse_wait(unsigned char type)
+{
+  unsigned int _time_out=100000;
+  if(type==0)
+  {
+    while(_time_out--) //Data
+    {
+      if((IoIn8(0x64) & 1)==1)
+      {
+        return;
+      }
+    }
+    return;
+  }
+  else
+  {
+    while(_time_out--) //Signal
+    {
+      if((IoIn8(0x64) & 2)==0)
+      {
+        return;
+      }
+    }
+    return;
+  }
+}
+
+void mouse_write(unsigned char a_write)
+{
+  // Wait to be able to send a command
+  mouse_wait(1);
+  // Tell the mouse we are sending a command
+  IoOut8(0x64, 0xD4); //  	Write next byte to second PS/2 port input buffer
+  // Wait for the final part
+  mouse_wait(1);
+  // Finally write
+  IoOut8(0x60, a_write);
+}
+
+unsigned char mouse_read()
+{
+  // Get response from mouse
+  mouse_wait(0);
+  return IoIn8(0x60);
+}
+
+// 0x64 : PS2_CMDPORT
+// 0x60 : PS2_DATAPORT
+void enable_ps2_mouse()
+{
+  mouse_wait(1);
+  IoOut8(0x64, 0xA8); // Enable second PS/2 port
+
+  // Read Config and enable second ps/2 port interrupt
+  mouse_wait(1);
+  IoOut8(0x64, 0x20);
+
+  unsigned char status_byte;
+  mouse_wait(0);
+  status_byte = (IoIn8(0x60) | 2);
+
+  // write ps/2 config
+  mouse_wait(1);
+  IoOut8(0x64, 0x60); // Write next byte to "byte 0" of internal RAM
+
+  mouse_wait(1);
+  IoOut8(0x60, status_byte);
+
+  mouse_write(0xF6); // Set Defaults
+  mouse_read();
+
+  mouse_write(0xF4); // Enable Data Reporting
+  mouse_read();
+}
+
+
+// Due to the lack of USB virtualization support, the PIC is used instead
+void EnableLegacyPIC()
+{
+  // mouse
+  enable_ps2_mouse();
+
+  // init master
+  IoOut8(0x20, 0x11);  // ICW1
+  IoOut8(0x21, 0x50);  // base int vector
+  IoOut8(0x21, 0x04);  // slave pos
+  IoOut8(0x21, 0x01);  // 8086mode, disable aeoi
+  IoOut8(0x21, 0xF9);  // enable keyboard and slave
+  // init slave
+  IoOut8(0xA0, 0x11);
+  IoOut8(0xA1, 0x58);  // slave vector
+  IoOut8(0xA1, 0x02);  // slave id
+  IoOut8(0xA1, 0x01);
+  IoOut8(0xA1, 0xEF);  // enalbe only mouse
 }
 
 void InitializeInterrupt() {
@@ -157,5 +313,8 @@ void InitializeInterrupt() {
   set_idt_entry(18, IntHandlerMC);
   set_idt_entry(19, IntHandlerXM);
   set_idt_entry(20, IntHandlerVE);
+  set_idt_entry(InterruptVector::kKeyBoardPS2, IntHandlerKeyBoard);
+  set_idt_entry(InterruptVector::kMousePS2, IntHandlerMouse);
   LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
+  EnableLegacyPIC();
 }

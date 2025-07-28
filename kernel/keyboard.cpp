@@ -48,6 +48,20 @@ const char keycode_map_shifted[256] = {
   0,    '|',  0,    0,    0,    0,    0,    0,   // 136
 };
 
+const uint8_t convPs2ToUSB[] {
+  0, 0, 30, 31, 32, 33, 34, 35,
+  36, 37, 38, 39, 45, 46, 42, 43,
+  20, 26, 8, 21, 23, 28, 24, 12,
+  18, 19, 47, 48, 40, 0, 4, 22,
+  7, 9, 10, 11, 13, 14, 15, 51,
+  52, 53, 0, 49, 29, 27, 6, 25, 5,
+  17, 16, 54, 55, 56, 0, 0, 0,
+  44, 0, 0, 59, 60, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 95, 96,
+  97, 92, 93, 0, 94, 0, 89, 90,
+  91, 98, 99, 0, 0, 0, 0, 0,
+};
+
 } // namespace
 
 void InitializeKeyboard() {
@@ -65,4 +79,55 @@ void InitializeKeyboard() {
       msg.arg.keyboard.press = press;
       task_manager->SendMessage(1, msg);
     };
+}
+
+uint8_t SetOrClear(uint8_t bits, uint8_t flag, bool set)
+{
+  if (set)
+  {
+    bits |= flag;
+  }
+  else
+  {
+    bits &= ~flag;
+  }
+  return bits;
+}
+
+void SendPS2Key(uint8_t keycode)
+{
+  static uint8_t modifier = 0;
+  if (!usb::HIDKeyboardDriver::default_observer)
+  {
+    return;
+  }
+
+  const bool press = keycode < 0x80;
+
+  if (!press)
+  {
+    keycode-=0x80;
+  }
+  if (keycode >= 88)
+  {
+    return;
+  }
+
+  switch (keycode)
+  {
+    case 0x1d: // lctrl
+      modifier = SetOrClear(modifier, kLControlBitMask, press);
+      break;
+    case 0x2a: // lshift
+      modifier = SetOrClear(modifier, kLShiftBitMask, press);
+      break;
+    case 0x36: // rshift
+      modifier = SetOrClear(modifier, kRShiftBitMask, press);
+      break;
+    case 0x38: // lalt
+      modifier = SetOrClear(modifier, kLAltBitMask, press);
+      break;
+  }
+  
+  usb::HIDKeyboardDriver::default_observer(modifier, convPs2ToUSB[keycode], press);
 }

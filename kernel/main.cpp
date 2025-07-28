@@ -200,7 +200,7 @@ extern "C" void KernelMainNewStack(
 
   fat::Initialize(volume_image);
   InitializeFont();
-  InitializePCI();
+  //InitializePCI();
 
   InitializeLayer();
   InitializeMainWindow();
@@ -220,7 +220,7 @@ extern "C" void KernelMainNewStack(
   InitializeTask();
   Task& main_task = task_manager->CurrentTask();
 
-  usb::xhci::Initialize();
+  //usb::xhci::Initialize();
   InitializeKeyboard();
   InitializeMouse();
 
