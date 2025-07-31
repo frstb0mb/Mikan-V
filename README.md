@@ -5,6 +5,10 @@ The goal is to implement this system by adding features rather than modifying ex
 
 ![](Mikan-V.png)
 
+## Demo
+
+https://github.com/user-attachments/assets/ddfe87ae-5d2b-45f6-b48f-90f847298528
+
 ## Build Instructions
 
 Follow the build steps provided in the [README_original.md](./README_original.md).
